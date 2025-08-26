@@ -1,0 +1,11 @@
+{
+    "preset": "laravel",
+    "rules": {
+        "@PHP83Migration": true
+    },
+    "exclude": [
+        "bootstrap",
+        "storage",
+        "vendor"
+    ]
+}
