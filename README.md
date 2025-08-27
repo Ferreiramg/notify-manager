@@ -1,7 +1,6 @@
 # NotifyManager
 
 [![Tests](https://github.com/Ferreiramg/notify-manager/workflows/Tests/badge.svg)](https://github.com/Ferreiramg/notify-manager/actions)
-[![Security](https://github.com/Ferreiramg/notify-manager/workflows/Security%20&%20Quality/badge.svg)](https://github.com/Ferreiramg/notify-manager/actions)
 [![Latest Stable Version](https://poser.pugx.org/ferreiramg/notify-manager/v/stable)](https://packagist.org/packages/ferreiramg/notify-manager)
 [![Total Downloads](https://poser.pugx.org/ferreiramg/notify-manager/downloads)](https://packagist.org/packages/ferreiramg/notify-manager)
 [![License](https://poser.pugx.org/ferreiramg/notify-manager/license)](https://packagist.org/packages/ferreiramg/notify-manager)

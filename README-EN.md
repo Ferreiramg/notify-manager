@@ -1,10 +1,11 @@
 # NotifyManager
 
 [![Tests](https://github.com/Ferreiramg/notify-manager/workflows/Tests/badge.svg)](https://github.com/Ferreiramg/notify-manager/actions)
-[![Security](https://github.com/Ferreiramg/notify-manager/workflows/Security%20&%20Quality/badge.svg)](https://github.com/Ferreiramg/notify-manager/actions)
 [![Latest Stable Version](https://poser.pugx.org/ferreiramg/notify-manager/v/stable)](https://packagist.org/packages/ferreiramg/notify-manager)
 [![Total Downloads](https://poser.pugx.org/ferreiramg/notify-manager/downloads)](https://packagist.org/packages/ferreiramg/notify-manager)
 [![License](https://poser.pugx.org/ferreiramg/notify-manager/license)](https://packagist.org/packages/ferreiramg/notify-manager)
+![PHP Version](https://img.shields.io/badge/php-8.3+-blue.svg)
+![Laravel Version](https://img.shields.io/badge/laravel-11.0+-red.svg)
 
 A comprehensive Laravel package for notification management with dispatch rules, logging, monetization, and multi-channel support.
 
