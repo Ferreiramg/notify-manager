@@ -9,11 +9,16 @@ use NotifyManager\Models\NotificationLog;
 use NotifyManager\Models\NotificationRule;
 use NotifyManager\Models\NotificationUsage;
 use NotifyManager\Services\NotificationManager;
+use NotifyManager\Services\QueueService;
+use NotifyManager\Services\TemplateService;
 use NotifyManager\Tests\Channels\MockSlackChannel;
 use NotifyManager\Tests\Channels\MockWhatsAppChannel;
 
 beforeEach(function () {
-    $this->manager = new NotificationManager;
+    $this->templateService = $this->mock(TemplateService::class);
+    $this->queueService = $this->mock(QueueService::class);
+
+    $this->manager = new NotificationManager($this->templateService, $this->queueService);
     $this->slackChannel = new MockSlackChannel(['cost_per_message' => 0.002]);
     $this->whatsappChannel = new MockWhatsAppChannel(['cost_per_message' => 0.005]);
     $this->emailChannel = new EmailChannel(['cost_per_message' => 0.001]);
@@ -572,4 +577,104 @@ test('processes conditions with complex operators', function () {
 
     expect($this->manager->shouldSend($notification2, $rule))
         ->toBeFalse();
+});
+
+test('can send notifications asynchronously via queue', function () {
+    $notification = NotificationDTO::create(
+        channel: 'slack',
+        recipient: '#general',
+        message: 'Async test message'
+    );
+
+    $this->queueService
+        ->shouldReceive('isEnabled')
+        ->once()
+        ->andReturn(true);
+
+    $this->queueService
+        ->shouldReceive('dispatch')
+        ->with(\Mockery::type(NotificationDTO::class), null)
+        ->once();
+
+    $this->manager->sendAsync($notification);
+});
+
+test('can send notifications at specific time', function () {
+    $notification = NotificationDTO::create(
+        channel: 'slack',
+        recipient: '#general',
+        message: 'Scheduled test message'
+    );
+
+    $when = now()->addHours(2);
+
+    $this->queueService
+        ->shouldReceive('isEnabled')
+        ->once()
+        ->andReturn(true);
+
+    $this->queueService
+        ->shouldReceive('dispatchAt')
+        ->with(\Mockery::type(NotificationDTO::class), $when)
+        ->once();
+
+    $this->manager->sendAt($notification, $when);
+});
+
+test('throws exception when trying to queue with disabled queue service', function () {
+    $notification = NotificationDTO::create(
+        channel: 'slack',
+        recipient: '#general',
+        message: 'Test message'
+    );
+
+    $this->queueService
+        ->shouldReceive('isEnabled')
+        ->once()
+        ->andReturn(false);
+
+    expect(function () use ($notification) {
+        $this->manager->sendAsync($notification);
+    })->toThrow(\RuntimeException::class, 'Queue service is not enabled');
+});
+
+test('processes templates when sending notifications', function () {
+    $notification = NotificationDTO::create(
+        channel: 'slack',
+        recipient: '#general',
+        message: 'Original message',
+        options: [
+            'template' => 'welcome',
+        ]
+    );
+
+    $this->templateService
+        ->shouldReceive('render')
+        ->with(\Mockery::type(NotificationDTO::class))
+        ->once()
+        ->andReturn('Rendered template message');
+
+    $result = $this->manager->send($notification);
+
+    expect($result)->toBeTrue();
+    expect($this->slackChannel->getSentNotifications())->toHaveCount(1);
+});
+
+test('skips template processing when no template service available', function () {
+    $managerWithoutTemplate = new NotificationManager(null, null);
+    $managerWithoutTemplate->registerChannel('slack', $this->slackChannel);
+
+    $notification = NotificationDTO::create(
+        channel: 'slack',
+        recipient: '#general',
+        message: 'Test message',
+        options: [
+            'template' => 'welcome',
+        ]
+    );
+
+    $result = $managerWithoutTemplate->send($notification);
+
+    expect($result)->toBeTrue();
+    expect($this->slackChannel->getSentNotifications())->toHaveCount(1);
 });

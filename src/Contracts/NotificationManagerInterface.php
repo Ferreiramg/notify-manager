@@ -43,4 +43,14 @@ interface NotificationManagerInterface
      * Log notification activity
      */
     public function logActivity(NotificationDTO $notification, string $status, ?string $response = null): void;
+
+    /**
+     * Send notification asynchronously via queue
+     */
+    public function sendAsync(NotificationDTO $notification, ?int $delay = null): void;
+
+    /**
+     * Send notification at a specific time
+     */
+    public function sendAt(NotificationDTO $notification, \DateTimeInterface $when): void;
 }

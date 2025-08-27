@@ -40,6 +40,13 @@ return [
         'enabled' => env('NOTIFY_MANAGER_MONETIZATION_ENABLED', true),
         'currency' => env('NOTIFY_MANAGER_CURRENCY', 'USD'),
         'default_cost_per_message' => env('NOTIFY_MANAGER_DEFAULT_COST', 0.01),
+        'priority_multipliers' => [
+            1 => 1.0,   // Low priority
+            2 => 1.5,   // Normal priority
+            3 => 2.0,   // High priority
+        ],
+        'length_multiplier_threshold' => 160, // Characters
+        'length_multiplier' => 1.2, // 20% extra for long messages
     ],
 
     /*
@@ -91,11 +98,14 @@ return [
     | Template Settings
     |--------------------------------------------------------------------------
     |
-    | Configure notification template settings.
+    | Configure notification template settings. Templates should be stored
+    | in resources/views/notifications/ and can be referenced by name.
+    | Example: 'welcome' will look for resources/views/notifications/welcome.blade.php
     |
     */
     'templates' => [
         'path' => resource_path('views/notifications'),
         'cache_enabled' => env('NOTIFY_MANAGER_TEMPLATE_CACHE', true),
+        'cache_ttl' => env('NOTIFY_MANAGER_TEMPLATE_CACHE_TTL', 3600), // 1 hour
     ],
 ];

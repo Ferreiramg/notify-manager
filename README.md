@@ -15,18 +15,20 @@ Um poderoso pacote Laravel para gerenciar notificações com regras de envio, lo
 
 - 🚀 **Suporte Multi-Canal**: Envie notificações através de Email, Telegram, Slack, WhatsApp e canais personalizados
 - 📋 **Envio Baseado em Regras**: Configure regras sofisticadas para controlar quando e como as notificações são enviadas
+- 🎨 **Sistema de Templates**: Use templates Blade para personalizar mensagens com cache automático
+- ⚡ **Processamento Assíncrono**: Envie notificações via fila com suporte a agendamento
 - 📊 **Log Abrangente**: Rastreie todas as atividades de notificação com logs detalhados
-- 💰 **Monetização**: Rastreamento de custos integrado e monitoramento de uso para serviços de notificação
-- ⚡ **PHP Moderno**: Construído com recursos do PHP 8.3+ incluindo classes readonly, enums e sintaxe moderna
-- 🧪 **Bem Testado**: Suíte de testes abrangente usando Pest PHP
-- 🎨 **Qualidade de Código**: Aplicado com estilo de código Laravel Pint
+- 💰 **Monetização**: Rastreamento de custos integrado com multiplicadores de prioridade e comprimento
+- 🔒 **PHP Moderno**: Construído com recursos do PHP 8.3+ incluindo classes readonly, enums e sintaxe moderna
+- 🧪 **Bem Testado**: Suíte de testes abrangente (73.8% cobertura) usando Pest PHP
+- � **Qualidade de Código**: Aplicado com estilo de código Laravel Pint
 
 ## Instalação
 
 Instale o pacote via Composer:
 
 ```bash
-composer require notify-manager/notify-manager
+composer require ferreiramg/notify-manager
 ```
 
 Execute o comando de instalação:
@@ -59,6 +61,25 @@ return [
         'enabled' => true,
         'currency' => 'USD',
         'default_cost_per_message' => 0.01,
+        'priority_multipliers' => [
+            1 => 1.0,   // Prioridade baixa
+            2 => 1.5,   // Prioridade normal  
+            3 => 2.0,   // Prioridade alta
+        ],
+        'length_multiplier_threshold' => 160, // Caracteres
+        'length_multiplier' => 1.2, // 20% extra para mensagens longas
+    ],
+    
+    'queue' => [
+        'enabled' => false,
+        'connection' => 'default',
+        'queue_name' => 'notifications',
+    ],
+    
+    'templates' => [
+        'path' => resource_path('views/notifications'),
+        'cache_enabled' => true,
+        'cache_ttl' => 3600, // 1 hora
     ],
     
     'logging' => [
@@ -78,6 +99,15 @@ NOTIFY_MANAGER_MONETIZATION_ENABLED=true
 NOTIFY_MANAGER_LOGGING_ENABLED=true
 NOTIFY_MANAGER_MAX_PER_HOUR=100
 NOTIFY_MANAGER_MAX_PER_DAY=1000
+
+# Queue Configuration
+NOTIFY_MANAGER_QUEUE_ENABLED=false
+NOTIFY_MANAGER_QUEUE_CONNECTION=redis
+NOTIFY_MANAGER_QUEUE_NAME=notifications
+
+# Template Configuration  
+NOTIFY_MANAGER_TEMPLATE_CACHE=true
+NOTIFY_MANAGER_TEMPLATE_CACHE_TTL=3600
 ```
 
 ## Uso
@@ -179,6 +209,103 @@ class SlackChannel implements NotificationChannelInterface
     }
 }
 ```
+
+### Sistema de Templates
+
+O NotifyManager suporta templates Blade para personalizar suas mensagens:
+
+#### Criando Templates
+
+Crie templates em `resources/views/notifications/`:
+
+```blade
+{{-- resources/views/notifications/welcome.blade.php --}}
+<h1>Bem-vindo, {{ $name }}!</h1>
+<p>Obrigado por se juntar à {{ $company }}.</p>
+<p>Sua conta foi criada com sucesso em {{ $notification->created_at }}.</p>
+
+@if(isset($special_offer))
+    <div class="offer">
+        <h2>Oferta Especial!</h2>
+        <p>{{ $special_offer }}</p>
+    </div>
+@endif
+```
+
+#### Usando Templates
+
+```php
+$notification = NotificationDTO::create(
+    channel: 'email',
+    recipient: 'user@example.com',
+    message: 'Mensagem de fallback se o template falhar',
+    options: [
+        'subject' => 'Bem-vindo!',
+        'template' => 'welcome',
+        'template_data' => [
+            'name' => 'João Silva',
+            'company' => 'Minha Empresa',
+            'special_offer' => 'Desconto de 20% na primeira compra!'
+        ]
+    ]
+);
+
+NotifyManager::send($notification);
+```
+
+#### Configuração de Templates
+
+```php
+// config/notify-manager.php
+'templates' => [
+    'path' => resource_path('views/notifications'),
+    'cache_enabled' => true,
+    'cache_ttl' => 3600, // 1 hora
+],
+```
+
+### Processamento Assíncrono (Queue)
+
+Envie notificações de forma assíncrona usando o sistema de filas do Laravel:
+
+#### Configuração da Fila
+
+```php
+// config/notify-manager.php
+'queue' => [
+    'enabled' => true,
+    'connection' => 'redis', // ou 'database', 'sqs', etc.
+    'queue_name' => 'notifications',
+],
+```
+
+#### Enviando Notificações Assíncronas
+
+```php
+// Envio imediato na fila
+NotifyManager::sendAsync($notification);
+
+// Envio com delay de 5 minutos
+NotifyManager::sendAsync($notification, 300);
+
+// Envio agendado para 2 horas no futuro
+NotifyManager::sendAt($notification, now()->addHours(2));
+
+// Envio agendado para data específica
+NotifyManager::sendAt($notification, Carbon::parse('2024-12-25 09:00:00'));
+```
+
+#### Processando a Fila
+
+```bash
+# Executar worker da fila
+php artisan queue:work --queue=notifications
+
+# Ou usar Supervisor para produção
+php artisan queue:work --queue=notifications --daemon
+```
+
+### Registrando Canais Personalizados
 
 Registre seu canal personalizado no service provider:
 
@@ -345,6 +472,144 @@ Habilite processamento em filas para melhor performance:
     'queue_name' => 'notifications',
 ],
 ```
+
+## Referência da API
+
+### NotificationManager
+
+#### Métodos Síncronos
+```php
+// Enviar notificação imediatamente
+NotifyManager::send(NotificationDTO $notification): bool
+
+// Calcular custo da notificação
+NotifyManager::calculateCost(NotificationDTO $notification): float
+
+// Registrar canal personalizado
+NotifyManager::registerChannel(string $name, NotificationChannelInterface $channel): void
+
+// Obter canal registrado
+NotifyManager::getChannel(string $name): ?NotificationChannelInterface
+
+// Criar regra de notificação
+NotifyManager::createRule(NotificationRuleDTO $rule): bool
+
+// Verificar se deve enviar baseado nas regras
+NotifyManager::shouldSend(NotificationDTO $notification): bool
+
+// Registrar atividade manualmente
+NotifyManager::logActivity(NotificationDTO $notification, string $status, ?string $response = null): void
+```
+
+#### Métodos Assíncronos (Queue)
+```php
+// Enviar notificação via fila
+NotifyManager::sendAsync(NotificationDTO $notification, ?int $delay = null): void
+
+// Agendar notificação para momento específico
+NotifyManager::sendAt(NotificationDTO $notification, \DateTimeInterface $when): void
+```
+
+### DTOs
+
+#### NotificationDTO
+```php
+NotificationDTO::create(
+    channel: string,           // Canal de envio (obrigatório)
+    recipient: string,         // Destinatário (obrigatório)
+    message: string,          // Mensagem (obrigatório)
+    options: [                // Opções (opcional)
+        'subject' => string,      // Assunto
+        'priority' => int,        // Prioridade (1-3)
+        'tags' => array,          // Tags para categorização
+        'template' => string,     // Nome do template
+        'template_data' => array, // Dados para o template
+        'metadata' => array,      // Metadados extras
+    ]
+): NotificationDTO
+```
+
+#### NotificationRuleDTO
+```php
+NotificationRuleDTO::create(
+    name: string,              // Nome da regra (obrigatório)
+    channel: string,           // Canal (obrigatório)
+    conditions: array,         // Condições (opcional)
+    options: [                 // Opções (opcional)
+        'allowed_days' => array,      // Dias permitidos (0-6)
+        'allowed_hours' => array,     // Horas permitidas (0-23)
+        'max_sends_per_day' => int,   // Limite diário
+        'max_sends_per_hour' => int,  // Limite por hora
+        'start_date' => Carbon,       // Data início
+        'end_date' => Carbon,         // Data fim
+        'priority' => int,            // Prioridade
+        'metadata' => array,          // Metadados
+        'is_active' => bool,          // Status ativo
+    ]
+): NotificationRuleDTO
+```
+
+### Modelos Eloquent
+
+#### NotificationLog
+```php
+// Buscar logs por status
+NotificationLog::where('status', 'sent')->get()
+
+// Buscar logs por canal
+NotificationLog::where('channel', 'email')->get()
+
+// Buscar logs com falhas
+NotificationLog::where('status', 'failed')
+    ->with('usage')
+    ->latest()
+    ->get()
+```
+
+#### NotificationUsage
+```php
+// Calcular custos por canal
+NotificationUsage::where('channel', 'email')->sum('cost')
+
+// Buscar uso por período
+NotificationUsage::whereBetween('used_at', [$start, $end])->get()
+```
+
+#### NotificationRule
+```php
+// Buscar regras ativas
+NotificationRule::where('is_active', true)->get()
+
+// Buscar regras por canal
+NotificationRule::where('channel', 'email')
+    ->where('is_active', true)
+    ->get()
+```
+
+## 📁 Exemplos
+
+O diretório `examples/` contém implementações práticas:
+
+- **Templates Blade**: Exemplos de templates para diferentes tipos de notificação
+- **Controller**: Controller completo com endpoints para notificações  
+- **Configurações**: Exemplos de configuração de filas e workers
+- **Métricas**: Queries para dashboard e monitoramento
+
+Veja o [README dos exemplos](examples/README.md) para instruções detalhadas.
+
+## Roadmap
+
+### Versão 1.1
+- [ ] Canais adicionais (SMS, Push Notifications)
+- [ ] Dashboard web para gerenciamento
+- [ ] Métricas e analytics avançados
+- [ ] Templates visuais com editor
+
+### Versão 1.2
+- [ ] Integração com provedores externos
+- [ ] Sistema de webhooks
+- [ ] API REST completa
+- [ ] Multi-tenancy
 
 ## Contribuindo
 

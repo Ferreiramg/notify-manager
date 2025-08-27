@@ -17,6 +17,29 @@ final class NotificationManager implements NotificationManagerInterface
 {
     private array $channels = [];
 
+    public function __construct(
+        private ?TemplateService $templateService = null,
+        private ?QueueService $queueService = null
+    ) {}
+
+    public function sendAsync(NotificationDTO $notification, ?int $delay = null): void
+    {
+        if (! $this->queueService || ! $this->queueService->isEnabled()) {
+            throw new \RuntimeException('Queue service is not enabled');
+        }
+
+        $this->queueService->dispatch($notification, $delay);
+    }
+
+    public function sendAt(NotificationDTO $notification, \DateTimeInterface $when): void
+    {
+        if (! $this->queueService || ! $this->queueService->isEnabled()) {
+            throw new \RuntimeException('Queue service is not enabled');
+        }
+
+        $this->queueService->dispatchAt($notification, $when);
+    }
+
     public function send(NotificationDTO $notification): bool
     {
         try {
@@ -37,6 +60,23 @@ final class NotificationManager implements NotificationManagerInterface
                 $this->logActivity($notification, 'failed', 'Notification not supported or invalid');
 
                 return false;
+            }
+
+            // Process template if available
+            if ($this->templateService && $notification->template) {
+                $renderedMessage = $this->templateService->render($notification);
+                $notification = new NotificationDTO(
+                    id: $notification->id,
+                    channel: $notification->channel,
+                    recipient: $notification->recipient,
+                    message: $renderedMessage,
+                    subject: $notification->subject,
+                    priority: $notification->priority,
+                    tags: $notification->tags,
+                    metadata: $notification->metadata,
+                    template: $notification->template,
+                    templateData: $notification->templateData
+                );
             }
 
             $cost = $this->calculateCost($notification);
