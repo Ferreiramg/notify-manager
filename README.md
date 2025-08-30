@@ -525,9 +525,67 @@ NotificationDTO::create(
         'template' => string,     // Nome do template
         'template_data' => array, // Dados para o template
         'metadata' => array,      // Metadados extras
+        'rules' => array,         // Regras inline (sobrescreve regras do banco)
     ]
 ): NotificationDTO
 ```
+
+##### Regras Inline
+
+Você pode passar regras diretamente no `NotificationDTO` usando o parâmetro `rules`. Quando fornecido, essas regras terão prioridade sobre as regras armazenadas no banco de dados para aquele canal:
+
+```php
+use NotifyManager\Models\NotificationRule;
+
+// Criar uma regra customizada
+$customRule = new NotificationRule([
+    'name' => 'High Priority Only',
+    'channel' => 'email',
+    'conditions' => [
+        [
+            'field' => 'priority',
+            'operator' => '>=',
+            'value' => 3,
+        ],
+    ],
+    'is_active' => true,
+    'max_sends_per_day' => 0,
+    'max_sends_per_hour' => 5,
+    'allowed_days' => [],
+    'allowed_hours' => [9, 10, 11, 12, 13, 14, 15, 16, 17], // Horário comercial
+    'priority' => 1,
+    'metadata' => [],
+]);
+
+// Usar a regra inline na notificação
+$notification = NotificationDTO::create(
+    channel: 'email',
+    recipient: 'user@example.com',
+    message: 'Mensagem crítica',
+    options: [
+        'priority' => 3,
+        'rules' => [$customRule], // Esta regra será usada em vez das regras do banco
+    ]
+);
+
+// Múltiplas regras inline
+$notification = NotificationDTO::create(
+    channel: 'email',
+    recipient: 'employee@company.com',
+    message: 'Mensagem interna',
+    options: [
+        'priority' => 2,
+        'rules' => [$priorityRule, $recipientRule, $timeRule], // Todas devem passar
+    ]
+);
+```
+
+**Vantagens das Regras Inline:**
+- ✅ Maior flexibilidade por notificação
+- ✅ Não dependem do banco de dados
+- ✅ Ideais para regras temporárias ou específicas
+- ✅ Sobrescrevem regras globais quando necessário
+- ✅ Permitem lógica de negócio mais dinâmica
 
 #### NotificationRuleDTO
 ```php

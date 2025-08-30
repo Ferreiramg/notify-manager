@@ -132,7 +132,7 @@ final class NotificationManager implements NotificationManagerInterface
 
     public function shouldSend(NotificationDTO $notification): bool
     {
-        $rules = NotificationRule::where('channel', $notification->channel)
+        $rules = ! empty($notification->rules) ? $notification->rules : NotificationRule::where('channel', $notification->channel)
             ->where('is_active', true)
             ->get();
 

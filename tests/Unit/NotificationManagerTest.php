@@ -713,3 +713,315 @@ test('skips template processing when no template service available', function ()
     expect($result)->toBeTrue();
     expect($this->slackChannel->getSentNotifications())->toHaveCount(1);
 });
+
+test('uses inline rules when provided in NotificationDTO', function () {
+    // Create a custom rule that blocks high priority messages
+    $customRule = new NotificationRule([
+        'name' => 'Inline High Priority Block',
+        'channel' => 'slack',
+        'conditions' => [
+            [
+                'field' => 'priority',
+                'operator' => '<',
+                'value' => 3,
+            ],
+        ],
+        'is_active' => true,
+        'max_sends_per_day' => 0,
+        'max_sends_per_hour' => 0,
+        'allowed_days' => [],
+        'allowed_hours' => [],
+        'priority' => 1,
+        'metadata' => [],
+    ]);
+
+    // Create notification with high priority and inline rules
+    $notification = NotificationDTO::create(
+        channel: 'slack',
+        recipient: '#general',
+        message: 'High priority message',
+        options: [
+            'priority' => 3,
+            'rules' => [$customRule], // Pass rules inline
+        ]
+    );
+
+    $result = $this->manager->shouldSend($notification);
+
+    // Should be blocked because priority 3 is not < 3
+    expect($result)->toBeFalse();
+});
+
+test('uses inline rules instead of database rules when provided', function () {
+    // Create a database rule that would allow the message
+    NotificationRule::create([
+        'name' => 'Database Allow All',
+        'channel' => 'slack',
+        'conditions' => [], // No conditions, allows everything
+        'is_active' => true,
+        'max_sends_per_day' => 0,
+        'max_sends_per_hour' => 0,
+        'allowed_days' => [],
+        'allowed_hours' => [],
+        'priority' => 1,
+        'metadata' => [],
+    ]);
+
+    // Create a custom rule that blocks messages containing 'blocked'
+    $blockingRule = new NotificationRule([
+        'name' => 'Inline Block Keyword',
+        'channel' => 'slack',
+        'conditions' => [
+            [
+                'field' => 'message',
+                'operator' => 'not_contains',
+                'value' => 'blocked',
+            ],
+        ],
+        'is_active' => true,
+        'max_sends_per_day' => 0,
+        'max_sends_per_hour' => 0,
+        'allowed_days' => [],
+        'allowed_hours' => [],
+        'priority' => 1,
+        'metadata' => [],
+    ]);
+
+    // Create notification with blocked keyword and inline rules
+    $notification = NotificationDTO::create(
+        channel: 'slack',
+        recipient: '#general',
+        message: 'This message is blocked',
+        options: [
+            'rules' => [$blockingRule], // Pass blocking rule inline
+        ]
+    );
+
+    $result = $this->manager->shouldSend($notification);
+
+    // Should be blocked by inline rule, ignoring database rule
+    expect($result)->toBeFalse();
+});
+
+test('processes multiple inline rules correctly', function () {
+    // Create multiple custom rules
+    $priorityRule = new NotificationRule([
+        'name' => 'Priority Check',
+        'channel' => 'slack',
+        'conditions' => [
+            [
+                'field' => 'priority',
+                'operator' => '>=',
+                'value' => 1,
+            ],
+        ],
+        'is_active' => true,
+        'max_sends_per_day' => 0,
+        'max_sends_per_hour' => 0,
+        'allowed_days' => [],
+        'allowed_hours' => [],
+        'priority' => 1,
+        'metadata' => [],
+    ]);
+
+    $recipientRule = new NotificationRule([
+        'name' => 'Recipient Check',
+        'channel' => 'slack',
+        'conditions' => [
+            [
+                'field' => 'recipient',
+                'operator' => '=',
+                'value' => '#general',
+            ],
+        ],
+        'is_active' => true,
+        'max_sends_per_day' => 0,
+        'max_sends_per_hour' => 0,
+        'allowed_days' => [],
+        'allowed_hours' => [],
+        'priority' => 1,
+        'metadata' => [],
+    ]);
+
+    // Create notification that meets both rules
+    $notification = NotificationDTO::create(
+        channel: 'slack',
+        recipient: '#general',
+        message: 'Test message',
+        options: [
+            'priority' => 2,
+            'rules' => [$priorityRule, $recipientRule],
+        ]
+    );
+
+    $result = $this->manager->shouldSend($notification);
+
+    // Should pass both rules
+    expect($result)->toBeTrue();
+});
+
+test('blocks notification when any inline rule fails', function () {
+    // Create rules where one will pass and one will fail
+    $passingRule = new NotificationRule([
+        'name' => 'Passing Rule',
+        'channel' => 'slack',
+        'conditions' => [
+            [
+                'field' => 'priority',
+                'operator' => '>=',
+                'value' => 1,
+            ],
+        ],
+        'is_active' => true,
+        'max_sends_per_day' => 0,
+        'max_sends_per_hour' => 0,
+        'allowed_days' => [],
+        'allowed_hours' => [],
+        'priority' => 1,
+        'metadata' => [],
+    ]);
+
+    $failingRule = new NotificationRule([
+        'name' => 'Failing Rule',
+        'channel' => 'slack',
+        'conditions' => [
+            [
+                'field' => 'recipient',
+                'operator' => '=',
+                'value' => '#restricted',
+            ],
+        ],
+        'is_active' => true,
+        'max_sends_per_day' => 0,
+        'max_sends_per_hour' => 0,
+        'allowed_days' => [],
+        'allowed_hours' => [],
+        'priority' => 1,
+        'metadata' => [],
+    ]);
+
+    // Create notification that passes first rule but fails second
+    $notification = NotificationDTO::create(
+        channel: 'slack',
+        recipient: '#general', // This doesn't match '#restricted'
+        message: 'Test message',
+        options: [
+            'priority' => 2,
+            'rules' => [$passingRule, $failingRule],
+        ]
+    );
+
+    $result = $this->manager->shouldSend($notification);
+
+    // Should be blocked because one rule fails
+    expect($result)->toBeFalse();
+});
+
+test('inline rules work with time-based constraints', function () {
+    // Create a rule with hour restriction
+    $timeRule = new NotificationRule([
+        'name' => 'Time Restricted',
+        'channel' => 'slack',
+        'conditions' => [],
+        'is_active' => true,
+        'max_sends_per_day' => 0,
+        'max_sends_per_hour' => 0,
+        'allowed_days' => [],
+        'allowed_hours' => [now()->hour], // Only allow current hour
+        'priority' => 1,
+        'metadata' => [],
+    ]);
+
+    $notification = NotificationDTO::create(
+        channel: 'slack',
+        recipient: '#general',
+        message: 'Time-based test',
+        options: [
+            'rules' => [$timeRule],
+        ]
+    );
+
+    $result = $this->manager->shouldSend($notification);
+
+    // Should pass because current hour is in allowed hours
+    expect($result)->toBeTrue();
+});
+
+test('inline rules work with send limits', function () {
+    // Create previous log entries to test limits
+    NotificationLog::create([
+        'notification_id' => 'test-123',
+        'channel' => 'slack',
+        'recipient' => '#general',
+        'message' => 'Previous message',
+        'status' => 'sent',
+        'response' => null,
+        'metadata' => [],
+        'sent_at' => now()->subMinutes(30), // Within the hour
+    ]);
+
+    // Create a rule with hourly limit of 1
+    $limitRule = new NotificationRule([
+        'name' => 'Hourly Limit',
+        'channel' => 'slack',
+        'conditions' => [],
+        'is_active' => true,
+        'max_sends_per_day' => 0,
+        'max_sends_per_hour' => 1, // Max 1 per hour
+        'allowed_days' => [],
+        'allowed_hours' => [],
+        'priority' => 1,
+        'metadata' => [],
+    ]);
+
+    $notification = NotificationDTO::create(
+        channel: 'slack',
+        recipient: '#general',
+        message: 'Should be blocked',
+        options: [
+            'rules' => [$limitRule],
+        ]
+    );
+
+    $result = $this->manager->shouldSend($notification);
+
+    // Should be blocked because limit is reached
+    expect($result)->toBeFalse();
+});
+
+test('sends notification with inline rules when all rules pass', function () {
+    // Create a permissive rule
+    $allowRule = new NotificationRule([
+        'name' => 'Allow All',
+        'channel' => 'slack',
+        'conditions' => [
+            [
+                'field' => 'priority',
+                'operator' => '>=',
+                'value' => 1,
+            ],
+        ],
+        'is_active' => true,
+        'max_sends_per_day' => 0,
+        'max_sends_per_hour' => 0,
+        'allowed_days' => [],
+        'allowed_hours' => [],
+        'priority' => 1,
+        'metadata' => [],
+    ]);
+
+    $notification = NotificationDTO::create(
+        channel: 'slack',
+        recipient: '#general',
+        message: 'Should be sent',
+        options: [
+            'priority' => 2,
+            'rules' => [$allowRule],
+        ]
+    );
+
+    $result = $this->manager->send($notification);
+
+    expect($result)->toBeTrue();
+    expect($this->slackChannel->getSentNotifications())->toHaveCount(1);
+});

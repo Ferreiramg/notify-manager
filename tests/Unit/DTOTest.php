@@ -67,7 +67,7 @@ test('notification DTO create method generates unique IDs', function () {
 });
 
 test('notification DTO can be converted to array', function () {
-    $scheduledAt = Carbon::now()->addHour();
+    $scheduledAt = new DateTime('+1 day');
 
     $notification = NotificationDTO::create(
         channel: 'email',
@@ -91,12 +91,60 @@ test('notification DTO can be converted to array', function () {
     expect($array['recipient'])->toBe('test@example.com');
     expect($array['message'])->toBe('Test message');
     expect($array['subject'])->toBe('Test');
-    expect($array['scheduled_at'])->toBe($scheduledAt->toISOString());
+    expect($array['scheduled_at'])->toBe($scheduledAt->format(DateTime::ATOM));
     expect($array['priority'])->toBe(2);
     expect($array['tags'])->toBe(['test']);
     expect($array['template'])->toBe('welcome');
     expect($array['template_data'])->toBe(['name' => 'John']);
     expect($array['metadata'])->toBe(['key' => 'value']);
+    expect($array['rules'])->toBe([]); // Default empty array
+});
+
+test('notification DTO can be created with inline rules', function () {
+    $mockRule = new \NotifyManager\Models\NotificationRule([
+        'name' => 'Test Rule',
+        'channel' => 'email',
+        'conditions' => [['field' => 'priority', 'operator' => '>=', 'value' => 2]],
+        'is_active' => true,
+    ]);
+
+    $notification = NotificationDTO::create(
+        channel: 'email',
+        recipient: 'test@example.com',
+        message: 'Test with rules',
+        options: [
+            'rules' => [$mockRule],
+            'priority' => 2,
+        ]
+    );
+
+    expect($notification->rules)->toHaveCount(1);
+    expect($notification->rules[0])->toBe($mockRule);
+    expect($notification->priority)->toBe(2);
+});
+
+test('notification DTO toArray includes rules parameter', function () {
+    $mockRule = new \NotifyManager\Models\NotificationRule([
+        'name' => 'Test Rule',
+        'channel' => 'email',
+        'conditions' => [['field' => 'priority', 'operator' => '>=', 'value' => 2]],
+        'is_active' => true,
+    ]);
+
+    $notification = NotificationDTO::create(
+        channel: 'email',
+        recipient: 'test@example.com',
+        message: 'Test with rules',
+        options: [
+            'rules' => [$mockRule],
+        ]
+    );
+
+    $array = $notification->toArray();
+
+    expect($array)->toHaveKey('rules');
+    expect($array['rules'])->toHaveCount(1);
+    expect($array['rules'][0])->toBe($mockRule);
 });
 
 test('can create notification rule DTO with all parameters', function () {
