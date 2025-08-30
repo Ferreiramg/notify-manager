@@ -27,7 +27,7 @@ interface NotificationManagerInterface
     /**
      * Create a new notification rule
      */
-    public function createRule(NotificationRuleDTO $rule): bool;
+    public function createRule(NotificationRuleDTO $rule): int;
 
     /**
      * Check if notification should be sent based on rules

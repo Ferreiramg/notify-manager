@@ -166,8 +166,43 @@ test('can create notification rule', function () {
 
     $result = $this->manager->createRule($rule);
 
-    expect($result)->toBeTrue();
+    expect($result)->toBeInt()
+        ->and($result)->toBeGreaterThan(0);
     expect(NotificationRule::where('name', 'Test Rule')->exists())->toBeTrue();
+
+    // Verify the returned ID corresponds to the created rule
+    $createdRule = NotificationRule::find($result);
+    expect($createdRule)->not->toBeNull()
+        ->and($createdRule->name)->toBe('Test Rule')
+        ->and($createdRule->channel)->toBe('slack');
+});
+
+test('createRule returns zero when creation fails', function () {
+    // Create a rule with data that will cause constraint violation
+    // First create a rule with the same name to cause a duplicate name error
+    NotificationRule::create([
+        'name' => 'Duplicate Rule',
+        'channel' => 'slack',
+        'conditions' => [],
+        'is_active' => true,
+        'max_sends_per_day' => 0,
+        'max_sends_per_hour' => 0,
+        'allowed_days' => [],
+        'allowed_hours' => [],
+        'priority' => 1,
+        'metadata' => [],
+    ]);
+
+    // Now try to create another rule with the same name (should fail due to uniqueness constraint)
+    $rule = NotificationRuleDTO::create(
+        name: 'Duplicate Rule',
+        channel: 'slack',
+        conditions: []
+    );
+
+    $result = $this->manager->createRule($rule);
+
+    expect($result)->toBe(0);
 });
 
 test('should send evaluates simple conditions correctly', function () {

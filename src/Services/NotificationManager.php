@@ -114,19 +114,19 @@ final class NotificationManager implements NotificationManagerInterface
         return $this->channels[$name] ?? null;
     }
 
-    public function createRule(NotificationRuleDTO $rule): bool
+    public function createRule(NotificationRuleDTO $rule): int
     {
         try {
-            NotificationRule::create($rule->toArray());
+            $rule = NotificationRule::create($rule->toArray());
 
-            return true;
+            return $rule->id ?? 0;
         } catch (\Throwable $e) {
             Log::error('Failed to create notification rule', [
                 'rule_name' => $rule->name,
                 'error' => $e->getMessage(),
             ]);
 
-            return false;
+            return 0;
         }
     }
 
@@ -276,8 +276,8 @@ final class NotificationManager implements NotificationManagerInterface
             '<' => $left < $right,
             '>=' => $left >= $right,
             '<=' => $left <= $right,
-            'contains' => str_contains((string) $left, (string) $right),
-            'not_contains' => ! str_contains((string) $left, (string) $right),
+            'contains' => str_contains(implode(', ', (array) $left), (string) $right),
+            'not_contains' => ! str_contains(implode(', ', (array) $left), (string) $right),
             'in' => in_array($left, (array) $right),
             'not_in' => ! in_array($left, (array) $right),
             default => false,
