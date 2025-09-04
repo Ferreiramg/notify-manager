@@ -17,6 +17,8 @@ final class NotificationManager implements NotificationManagerInterface
 {
     private array $channels = [];
 
+    private string $rulesError = '';
+
     public function __construct(
         private ?TemplateService $templateService = null,
         private ?QueueService $queueService = null
@@ -44,7 +46,7 @@ final class NotificationManager implements NotificationManagerInterface
     {
         try {
             if (! $this->shouldSend($notification)) {
-                $this->logActivity($notification, 'blocked', 'Blocked by rules');
+                $this->logActivity($notification, 'blocked', $this->rulesError);
 
                 return false;
             }
@@ -193,20 +195,29 @@ final class NotificationManager implements NotificationManagerInterface
     {
         // Check date range
         if ($rule->start_date && now()->lt($rule->start_date)) {
+            $this->rulesError = "Current date is before the rule's start date.";
+
             return false;
         }
 
         if ($rule->end_date && now()->gt($rule->end_date)) {
+            $this->rulesError = "Current date is after the rule's end date.";
+
             return false;
         }
 
         // Check allowed days
         if (! empty($rule->allowed_days) && ! in_array(now()->dayOfWeek, $rule->allowed_days)) {
+
+            $this->rulesError = "Today is not in the rule's allowed days. Pemitted days: ".implode(', ', $rule->allowed_days).'. Today is: '.now()->dayOfWeek.'.';
+
             return false;
         }
 
         // Check allowed hours
         if (! empty($rule->allowed_hours) && ! in_array(now()->hour, $rule->allowed_hours)) {
+            $this->rulesError = "Current hour is not in the rule's allowed hours. Permitted hours: ".implode(', ', $rule->allowed_hours).'. Current hour is: '.now()->hour.'.';
+
             return false;
         }
 
@@ -218,6 +229,8 @@ final class NotificationManager implements NotificationManagerInterface
                 ->count();
 
             if ($todaySends >= $rule->max_sends_per_day) {
+                $this->rulesError = 'Daily send limit reached. Max allowed: '.$rule->max_sends_per_day.', sent today: '.$todaySends.'.';
+
                 return false;
             }
         }
@@ -230,6 +243,8 @@ final class NotificationManager implements NotificationManagerInterface
                 ->count();
 
             if ($hourSends >= $rule->max_sends_per_hour) {
+                $this->rulesError = 'Hourly send limit reached. Max allowed: '.$rule->max_sends_per_hour.', sent in the last hour: '.$hourSends.'.';
+
                 return false;
             }
         }
